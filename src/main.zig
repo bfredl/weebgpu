@@ -15,12 +15,37 @@ pub fn main() !void {
     const size = 512;
 
     const buf = s.device.createBuffer(&.{
-        .mapped_at_creation = true,
+        // .mapped_at_creation = true,
         .size = size,
         .usage = .{ .storage = true },
     });
 
     std.debug.print("fin buffer {}!\n", .{buf});
+
+    const layout = s.device.createBindGroupLayout(&gpu.BindGroupLayout.Descriptor.init(.{
+        .entries = &[_]gpu.BindGroupLayout.Entry{
+            .{
+                .binding = 0,
+                .visibility = .{ .compute = true },
+                .buffer = .{ .type = .storage },
+            },
+        },
+    }));
+
+    std.debug.print("fin layout {}!\n", .{layout});
+
+    const bind_group = s.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+        .layout = layout,
+        .entries = &[_]gpu.BindGroup.Entry{
+            .{
+                .binding = 0,
+                .buffer = buf,
+                .size = size,
+            },
+        },
+    }));
+
+    std.debug.print("fin grupp {}!\n", .{bind_group});
 }
 
 inline fn printUnhandledErrorCallback(_: void, typ: gpu.ErrorType, message: [*:0]const u8) void {
