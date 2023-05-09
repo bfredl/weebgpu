@@ -1,0 +1,25 @@
+const std = @import("std");
+const system_sdk = @import("libs/mach-glfw/system_sdk.zig");
+const glfw = @import("libs/mach-glfw/build.zig");
+const gpu_dawn = @import("libs/mach-gpu-dawn/sdk.zig").Sdk(.{
+    //.glfw = glfw,
+    .glfw_include_dir = "glfw/upstream/glfw/include",
+    .system_sdk = system_sdk,
+});
+const gpu = @import("libs/mach-gpu/sdk.zig").Sdk(.{
+    //.glfw = glfw,
+    .gpu_dawn = gpu_dawn,
+});
+
+pub fn build(b: *std.Build) !void {
+    const opt = b.standardOptimizeOption(.{});
+
+    var exe = b.addExecutable(.{
+        .name = "main",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .optimize = opt,
+    });
+    exe.addModule("gpu", gpu.module(b));
+    try gpu.link(b, exe, .{});
+    b.installArtifact(exe);
+}
