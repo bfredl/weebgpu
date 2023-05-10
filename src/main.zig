@@ -12,15 +12,31 @@ pub const Setup = struct {
 pub fn main() !void {
     const s = try setup();
     const dev = s.device;
-    const size = 512;
+    const elm = 128;
+    const size = 4 * elm;
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    if (false) {
+        const features = try dev.enumerateFeaturesOwned(allocator);
+        defer allocator.free(features);
+        for (features) |namm| {
+            std.debug.print("feat: {}\n", .{namm});
+        }
+    }
 
     const buf = dev.createBuffer(&.{
         // .mapped_at_creation = true,
         .size = size,
-        .usage = .{ .storage = true },
+        .usage = .{ .storage = true, .copy_src = true },
     });
 
-    std.debug.print("fin buffer {}!\n", .{buf});
+    const buf_read = dev.createBuffer(&.{
+        // .mapped_at_creation = true,
+        .size = size,
+        .usage = .{ .copy_dst = true, .map_read = true },
+    });
 
     const layout = dev.createBindGroupLayout(&gpu.BindGroupLayout.Descriptor.init(.{
         .entries = &[_]gpu.BindGroupLayout.Entry{
@@ -31,8 +47,6 @@ pub fn main() !void {
             },
         },
     }));
-
-    std.debug.print("fin layout {}!\n", .{layout});
 
     const bind_group = dev.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = layout,
@@ -45,12 +59,8 @@ pub fn main() !void {
         },
     }));
 
-    std.debug.print("fin grupp {}!\n", .{bind_group});
-
     const kod = @embedFile("./shader.wgsl");
-    const module = dev.createShaderModule(&.{ .next_in_chain = .{ .wgsl_descriptor = &.{ .source = kod } } });
-
-    std.debug.print("fin shader {}!\n", .{module});
+    const module = dev.createShaderModuleWGSL(null, kod);
 
     const pipeline_layout = dev.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &[_]*gpu.BindGroupLayout{layout},
@@ -64,8 +74,6 @@ pub fn main() !void {
         },
     });
 
-    std.debug.print("fin pipeline {}!\n", .{pipeline});
-
     const commandEncoder = dev.createCommandEncoder(&.{});
     const passEncoder = commandEncoder.beginComputePass(&.{});
     passEncoder.setPipeline(pipeline);
@@ -73,11 +81,26 @@ pub fn main() !void {
     passEncoder.dispatchWorkgroups(2, 1, 1);
     passEncoder.end();
 
-    std.debug.print("iin passkodare {}!\n", .{passEncoder});
-
+    commandEncoder.copyBufferToBuffer(buf, 0, buf_read, 0, size);
     const gpuCommands = commandEncoder.finish(&.{});
     dev.getQueue().submit(&[_]*gpu.CommandBuffer{gpuCommands});
-    std.debug.print("dunit!\n", .{});
+    std.debug.print("submitted!\n", .{});
+
+    var status: ?gpu.Buffer.MapAsyncStatus = null;
+    buf_read.mapAsync(.{ .read = true }, 0, size, &status, callback);
+    var i: u32 = 0;
+    const result = res: {
+        while (true) : (i += 1) {
+            dev.tick();
+            if (status) |st| break :res st;
+        }
+    };
+    std.debug.print("tickade: {}\n", .{i});
+    std.debug.print("here is the result: {}!\n", .{result});
+}
+
+inline fn callback(ctx: *?gpu.Buffer.MapAsyncStatus, status: gpu.Buffer.MapAsyncStatus) void {
+    ctx.* = status;
 }
 
 inline fn printUnhandledErrorCallback(_: void, typ: gpu.ErrorType, message: [*:0]const u8) void {
