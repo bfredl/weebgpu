@@ -25,7 +25,7 @@ pub fn main() !void {
         .size = size,
     };
 
-    const ret = intel_ioctl(fd.handle, .WR, DRM_I915_GEM_CREATE, &gem_create);
+    var ret = intel_ioctl(fd.handle, .WR, DRM_I915_GEM_CREATE, &gem_create);
     if (ret != 0) {
         // FIXME: What do we do if this fails?
         std.log.info("the cow jumped over the moon: {}\n", .{linux.getErrno(ret)});
@@ -33,12 +33,31 @@ pub fn main() !void {
     }
 
     std.log.info("fin handel: {}", .{gem_create.handle});
+    const gem_handle = gem_create.handle;
+
+    var gem_mmap: drm_i915_gem_mmap_offset = .{
+        .handle = gem_handle,
+        .flags = I915_MMAP_OFFSET_WB,
+    };
+    ret = intel_ioctl(fd.handle, .WR, DRM_I915_GEM_MMAP, &gem_mmap);
+    if (ret != 0) {
+        // FIXME: What do we do if this fails?
+        std.log.info("holy jumping george: {}\n", .{linux.getErrno(ret)});
+        return;
+    }
 }
 
 const drm_i915_gem_create = extern struct {
     size: u64,
     handle: u32 = undefined,
     pad: u32 = undefined,
+};
+
+const drm_i915_gem_mmap_offset = extern struct {
+    handle: u32,
+    pad: u32 = 0,
+    offset: u32 = undefined,
+    flags: u64,
 };
 
 const Dir = enum(u32) {
@@ -80,3 +99,8 @@ const DRM_I915_GEM_SET_TILING = 0x21;
 const DRM_I915_GEM_GET_TILING = 0x22;
 const DRM_I915_GEM_GET_APERTURE = 0x23;
 const DRM_I915_GEM_MMAP_GTT = 0x24;
+
+const I915_MMAP_OFFSET_WC = 1;
+const I915_MMAP_OFFSET_WB = 2;
+const I915_MMAP_OFFSET_UC = 3;
+const I915_MMAP_OFFSET_FIXED = 4;
