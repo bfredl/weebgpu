@@ -1,6 +1,7 @@
 const std = @import("std");
 const fs = std.fs;
 const linux = std.os.linux;
+const info = std.log.info;
 
 pub fn retry_ioctl(fd: linux.fd_t, request: u32, arg: usize) usize {
     while (true) {
@@ -12,12 +13,29 @@ pub fn retry_ioctl(fd: linux.fd_t, request: u32, arg: usize) usize {
 
 pub fn intel_ioctl(fd: linux.fd_t, dir: Dir, num: u32, arg: anytype) usize {
     const typ = @typeInfo(@TypeOf(arg)).Pointer.child;
-    return retry_ioctl(fd, ioctlnr(dir, num, @sizeOf(typ)), @ptrToInt(arg));
+    const cmd = ioctlnr(dir, num, @sizeOf(typ));
+    info("begå {s}: {}", .{ @typeName(typ), cmd });
+    const status = retry_ioctl(fd, cmd, @ptrToInt(arg));
+    const err = linux.getErrno(status);
+    if (err != .SUCCESS) {
+        // FIXME: What do we do if this fails?
+        info("the cow jumped over the moon: {}", .{err});
+    }
+    return status;
 }
 
 pub fn main() !void {
-    const fd = try fs.cwd().openFileZ("/dev/dri/renderD128", .{ .mode = .read_write });
-    std.log.info("the fd {}\n", .{fd});
+    const fd = (try fs.cwd().openFileZ("/dev/dri/renderD128", .{ .mode = .read_write })).handle;
+    info("the fd {}\n", .{fd});
+
+    var create: drm_i915_gem_context_create = .{};
+    const cret = intel_ioctl(fd, .WR, DRM_I915_GEM_CONTEXT_CREATE, &create);
+    if (cret != 0) {
+        return;
+    }
+
+    const context_id = create.ctx_id;
+    info("fin kontext: {}", .{context_id});
 
     const size = 4 * 4096;
 
@@ -25,26 +43,28 @@ pub fn main() !void {
         .size = size,
     };
 
-    var ret = intel_ioctl(fd.handle, .WR, DRM_I915_GEM_CREATE, &gem_create);
+    var ret = intel_ioctl(fd, .WR, DRM_I915_GEM_CREATE, &gem_create);
     if (ret != 0) {
-        // FIXME: What do we do if this fails?
-        std.log.info("the cow jumped over the moon: {}\n", .{linux.getErrno(ret)});
         return;
     }
 
-    std.log.info("fin handel: {}", .{gem_create.handle});
+    info("fin handel: {}", .{gem_create.handle});
     const gem_handle = gem_create.handle;
 
     var gem_mmap: drm_i915_gem_mmap_offset = .{
         .handle = gem_handle,
         .flags = I915_MMAP_OFFSET_WB,
     };
-    ret = intel_ioctl(fd.handle, .WR, DRM_I915_GEM_MMAP, &gem_mmap);
+    ret = intel_ioctl(fd, .WR, DRM_I915_GEM_MMAP_GTT, &gem_mmap);
     if (ret != 0) {
-        // FIXME: What do we do if this fails?
-        std.log.info("holy jumping george: {}\n", .{linux.getErrno(ret)});
         return;
     }
+
+    info("ofsetten: {}", .{gem_mmap});
+
+    const ptr = linux.mmap(null, size, linux.PROT.WRITE | linux.PROT.READ, linux.MAP.SHARED, fd, @intCast(i64, gem_mmap.offset));
+
+    info("pekaren: {}", .{ptr});
 }
 
 const drm_i915_gem_create = extern struct {
@@ -53,11 +73,17 @@ const drm_i915_gem_create = extern struct {
     pad: u32 = undefined,
 };
 
+const drm_i915_gem_context_create = extern struct {
+    ctx_id: u32 = undefined,
+    pad: u32 = undefined,
+};
+
 const drm_i915_gem_mmap_offset = extern struct {
     handle: u32,
     pad: u32 = 0,
-    offset: u32 = undefined,
+    offset: u64 = undefined,
     flags: u64,
+    extensions: u64 = 0,
 };
 
 const Dir = enum(u32) {
@@ -99,6 +125,7 @@ const DRM_I915_GEM_SET_TILING = 0x21;
 const DRM_I915_GEM_GET_TILING = 0x22;
 const DRM_I915_GEM_GET_APERTURE = 0x23;
 const DRM_I915_GEM_MMAP_GTT = 0x24;
+const DRM_I915_GEM_CONTEXT_CREATE = 0x2d;
 
 const I915_MMAP_OFFSET_WC = 1;
 const I915_MMAP_OFFSET_WB = 2;
