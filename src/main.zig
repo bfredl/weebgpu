@@ -1,5 +1,7 @@
 const std = @import("std");
 const gpu = @import("gpu");
+const util = @import("./util.zig");
+const ioctlnr = util.ioctlnr;
 
 pub const GPUInterface = gpu.dawn.Interface;
 
@@ -11,18 +13,32 @@ pub const Setup = struct {
 
 extern fn __errno_location() callconv(.C) *c_int;
 
+const c = @import("./c.zig");
+
+pub fn unpack(request: u32, arg: usize, dir: util.Dir, kind: u32, comptime Data: type) ?*const Data {
+    if (request == ioctlnr(dir, kind, @sizeOf(Data))) {
+        return @intToPtr(*const Data, arg);
+    }
+    return null;
+}
+
 export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
-    // std.log.info("glass!", .{});
+    // std.log.info("glass! {}", .{request});
     std.debug.print(".", .{});
     const result = @bitCast(isize, std.os.linux.ioctl(fd, request, arg));
     if (result < 0) {
         __errno_location().* = @intCast(c_int, -result);
         return -1;
     }
+
+    if (unpack(request, arg, .WR, c.DRM_I915_GEM_MMAP_GTT, c.drm_i915_gem_mmap_offset)) |data| {
+        std.log.info("mmap! {}", .{data});
+    }
     return @intCast(c_int, result);
 }
 
 pub fn main() !void {
+    std.log.info("ful {}!", .{c.DRM_IOCTL_I915_GEM_MMAP_GTT});
     const s = try setup();
     const dev = s.device;
     const elm = 128;

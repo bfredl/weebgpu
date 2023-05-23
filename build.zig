@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = opt,
     });
     exe.addModule("gpu", gpu.module(b));
+    exe.addIncludePath("src/uapi");
     try gpu.link(b, exe, .{});
     b.installArtifact(exe);
 }

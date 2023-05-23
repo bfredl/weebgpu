@@ -2,6 +2,8 @@ const std = @import("std");
 const fs = std.fs;
 const linux = std.os.linux;
 const info = std.log.info;
+const util = @import("./util.zig");
+const ioctlnr = util.ioctlnr;
 
 pub fn retry_ioctl(fd: linux.fd_t, request: u32, arg: usize) usize {
     while (true) {
@@ -11,7 +13,7 @@ pub fn retry_ioctl(fd: linux.fd_t, request: u32, arg: usize) usize {
     }
 }
 
-pub fn intel_ioctl(fd: linux.fd_t, dir: Dir, num: u32, arg: anytype) usize {
+pub fn intel_ioctl(fd: linux.fd_t, dir: util.Dir, num: u32, arg: anytype) usize {
     const typ = @typeInfo(@TypeOf(arg)).Pointer.child;
     const cmd = ioctlnr(dir, num, @sizeOf(typ));
     info("begå {s}: {}", .{ @typeName(typ), cmd });
@@ -55,6 +57,7 @@ pub fn main() !void {
         .handle = gem_handle,
         .flags = I915_MMAP_OFFSET_WB,
     };
+    info("fina: {}", .{DRM_I915_GEM_MMAP_GTT});
     ret = intel_ioctl(fd, .WR, DRM_I915_GEM_MMAP_GTT, &gem_mmap);
     if (ret != 0) {
         return;
@@ -85,27 +88,6 @@ const drm_i915_gem_mmap_offset = extern struct {
     flags: u64,
     extensions: u64 = 0,
 };
-
-const Dir = enum(u32) {
-    R = 1,
-    W = 2,
-    WR = 3,
-};
-
-fn ioctlnr(dir: Dir, num: u32, size: u32) u32 {
-    const _IOC_NRBITS = 8;
-    const _IOC_TYPEBITS = 8;
-    const _IOC_SIZEBITS = 14;
-
-    const _IOC_NRSHIFT = 0;
-    const _IOC_TYPESHIFT = (_IOC_NRSHIFT + _IOC_NRBITS);
-    const _IOC_SIZESHIFT = (_IOC_TYPESHIFT + _IOC_TYPEBITS);
-    const _IOC_DIRSHIFT = (_IOC_SIZESHIFT + _IOC_SIZEBITS);
-    return ((@enumToInt(dir) << _IOC_DIRSHIFT) |
-        (('d') << _IOC_TYPESHIFT) |
-        ((num + 0x40) << _IOC_NRSHIFT) |
-        ((size) << _IOC_SIZESHIFT));
-}
 
 const DRM_I915_GEM_INIT = 0x13;
 const DRM_I915_GEM_EXECBUFFER = 0x14;
