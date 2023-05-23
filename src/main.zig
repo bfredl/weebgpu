@@ -22,17 +22,61 @@ pub fn unpack(request: u32, arg: usize, dir: util.Dir, kind: u32, comptime Data:
     return null;
 }
 
+fn display(value: anytype) !void {
+    const ANY = "any";
+    const info = @typeInfo(@TypeOf(value)).Struct;
+    const writer = std.io.getStdErr().writer();
+    try writer.writeAll("{");
+    inline for (info.fields, 0..) |f, i| {
+        if (i == 0) {
+            try writer.writeAll(" .");
+        } else {
+            try writer.writeAll(", .");
+        }
+        try writer.writeAll(f.name);
+        try writer.writeAll(" = ");
+        try std.fmt.formatType(@field(value, f.name), ANY, .{}, writer, 2);
+    }
+    try writer.writeAll(" }");
+}
+
+fn display_if(request: u32, arg: usize, dir: util.Dir, kind: u32, comptime Data: type, titel: []const u8) ?*const Data {
+    const d = unpack(request, arg, dir, kind, Data);
+    if (d) |data| {
+        std.debug.print("{s}! ", .{titel});
+        display(data.*) catch unreachable;
+        std.debug.print("\n", .{});
+    }
+    return d;
+}
+
 export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
     // std.log.info("glass! {}", .{request});
-    std.debug.print(".", .{});
     const result = @bitCast(isize, std.os.linux.ioctl(fd, request, arg));
     if (result < 0) {
         __errno_location().* = @intCast(c_int, -result);
         return -1;
     }
 
-    if (unpack(request, arg, .WR, c.DRM_I915_GEM_MMAP_GTT, c.drm_i915_gem_mmap_offset)) |data| {
-        std.log.info("mmap! {}", .{data});
+    std.debug.print("{} ", .{fd});
+    if (display_if(request, arg, .WR, c.DRM_I915_GEM_MMAP_GTT, c.drm_i915_gem_mmap_offset, "mmap")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_CREATE, c.drm_i915_gem_create, "gem_create")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_CONTEXT_CREATE, c.drm_i915_gem_context_create_ext, "gem_context_create")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_CONTEXT_SETPARAM, c.drm_i915_gem_context_param, "gem_context_setparam")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_QUERY, c.drm_i915_query, "query")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GETPARAM, c.drm_i915_getparam, "getparam")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_CONTEXT_GETPARAM, c.drm_i915_gem_context_param, "context_getparam")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_GET_APERTURE, c.drm_i915_gem_get_aperture, "aperture")) |data| {
+        _ = data;
+    } else {
+        std.debug.print(".\n", .{});
     }
     return @intCast(c_int, result);
 }
@@ -43,6 +87,8 @@ pub fn main() !void {
     const dev = s.device;
     const elm = 128;
     const size = 4 * elm;
+
+    std.debug.print("\n[FOUND]\n\n", .{});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -186,7 +232,7 @@ pub fn setup() !Setup {
     // Print which adapter we are using.
     var props = std.mem.zeroes(gpu.Adapter.Properties);
     response.?.adapter.getProperties(&props);
-    std.debug.print("\nfound GLUGG backend on {s} adapter: {s}, {s}\n", .{
+    std.debug.print("\nfound GLUGG backend on {s} adapter: {s}, {s}\n\n", .{
         // props.backend_type.name(),
         props.adapter_type.name(),
         props.name,
