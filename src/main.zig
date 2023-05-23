@@ -2,6 +2,7 @@ const std = @import("std");
 const gpu = @import("gpu");
 const util = @import("./util.zig");
 const ioctlnr = util.ioctlnr;
+const print = std.debug.print;
 
 pub const GPUInterface = gpu.dawn.Interface;
 
@@ -43,9 +44,9 @@ fn display(value: anytype) !void {
 fn display_if(request: u32, arg: usize, dir: util.Dir, kind: u32, comptime Data: type, titel: []const u8) ?*const Data {
     const d = unpack(request, arg, dir, kind, Data);
     if (d) |data| {
-        std.debug.print("{s}! ", .{titel});
+        print("{s}! ", .{titel});
         display(data.*) catch unreachable;
-        std.debug.print("\n", .{});
+        print("\n", .{});
     }
     return d;
 }
@@ -64,7 +65,7 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
         return @intCast(c_int, result);
     }
 
-    std.debug.print("{} ", .{fd});
+    print("{} ", .{fd});
     if (display_if(request, arg, .WR, c.DRM_I915_GEM_MMAP_GTT, c.drm_i915_gem_mmap_offset, "mmap")) |data| {
         _ = data;
     } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_CREATE, c.drm_i915_gem_create, "gem_create")) |data| {
@@ -82,15 +83,30 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
     } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_GET_APERTURE, c.drm_i915_gem_get_aperture, "aperture")) |data| {
         _ = data;
     } else if (display_if(request, arg, .R, c.DRM_I915_GEM_EXECBUFFER2, c.drm_i915_gem_execbuffer2, "exec time!!")) |data| {
-        _ = data;
+        if ((data.flags & c.I915_EXEC_FENCE_ARRAY) != 0) {
+            const fences = @intToPtr([*]const c.struct_drm_i915_gem_exec_fence, data.cliprects_ptr)[0..data.num_cliprects];
+            for (fences) |b| {
+                print("MAN KLIPPA: ", .{});
+                display(b) catch unreachable;
+                print("\n", .{});
+            }
+        }
+        const bufs = @intToPtr([*]const drm_i915_gem_exec_object2, data.buffers_ptr)[0..data.buffer_count];
+        for (bufs) |b| {
+            print("BUF ", .{});
+            display(b) catch unreachable;
+            print("\n", .{});
+        }
     } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_WAIT, c.drm_i915_gem_wait, "gem_wait!")) |data| {
         _ = data;
     } else if (display_if(request, arg, .WR, 0xbf - 0x40, c.drm_syncobj_create, "syncobj!")) |data| {
         _ = data;
     } else if (display_if(request, arg, .WR, 0xc3 - 0x40, c.drm_syncobj_wait, "sync wait")) |data| {
         _ = data;
+    } else if (display_if(request, arg, .WR, 0xc4 - 0x40, c.drm_syncobj_array, "sync reset")) |data| {
+        _ = data;
     } else {
-        std.debug.print(". {}: {}\n", .{ request, util.parse_nr(request) });
+        print(". {}: {}\n", .{ request, util.parse_nr(request) });
     }
     return @intCast(c_int, result);
 }
@@ -102,9 +118,7 @@ pub fn main() !void {
     const elm = 128;
     const size = 4 * elm;
 
-    std.debug.print("\n[FOUND]\n\n", .{});
-    std.debug.print("the sync create: num {} siz {}\n", .{ 0xbf, @sizeOf(c.drm_syncobj_create) });
-    std.debug.print("the sync wait: {} siz {}\n", .{ 0xc3, @sizeOf(c.drm_syncobj_wait) });
+    print("\n[FOUND]\n\n", .{});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -113,21 +127,26 @@ pub fn main() !void {
         const features = try dev.enumerateFeaturesOwned(allocator);
         defer allocator.free(features);
         for (features) |namm| {
-            std.debug.print("feat: {}\n", .{namm});
+            print("feat: {}\n", .{namm});
         }
     }
 
+    print("buffer 1\n", .{});
     const buf = dev.createBuffer(&.{
         // .mapped_at_creation = true,
         .size = size,
         .usage = .{ .storage = true, .copy_src = true },
     });
 
+    print("buffer 2\n", .{});
+
     const buf_read = dev.createBuffer(&.{
         // .mapped_at_creation = true,
         .size = size,
         .usage = .{ .copy_dst = true, .map_read = true },
     });
+
+    print("layouten \n", .{});
 
     const layout = dev.createBindGroupLayout(&gpu.BindGroupLayout.Descriptor.init(.{
         .entries = &[_]gpu.BindGroupLayout.Entry{
@@ -150,8 +169,12 @@ pub fn main() !void {
         },
     }));
 
+    print("KOD:\n", .{});
+
     const kod = @embedFile("./shader.wgsl");
     const module = dev.createShaderModuleWGSL(null, kod);
+
+    print("piplinje!!:\n", .{});
 
     const pipeline_layout = dev.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &[_]*gpu.BindGroupLayout{layout},
@@ -165,6 +188,8 @@ pub fn main() !void {
         },
     });
 
+    print("kommando kodning:\n", .{});
+
     const commandEncoder = dev.createCommandEncoder(&.{});
     const passEncoder = commandEncoder.beginComputePass(&.{});
     passEncoder.setPipeline(pipeline);
@@ -176,7 +201,7 @@ pub fn main() !void {
     const gpuCommands = commandEncoder.finish(&.{});
     var cmdbuf: [1]*gpu.CommandBuffer = .{gpuCommands};
     dev.getQueue().submit(&cmdbuf);
-    std.debug.print("\nsubmitted!\n", .{});
+    print("\nsubmitted!\n", .{});
 
     var status: ?gpu.Buffer.MapAsyncStatus = null;
     buf_read.mapAsync(.{ .read = true }, 0, size, &status, callback);
@@ -187,8 +212,8 @@ pub fn main() !void {
             if (status) |st| break :res st;
         }
     };
-    std.debug.print("\ntickade: {}\n", .{i});
-    std.debug.print("here is the result: {}!\n", .{result});
+    print("\ntickade: {}\n", .{i});
+    print("here is the result: {}!\n", .{result});
 }
 
 inline fn callback(ctx: *?gpu.Buffer.MapAsyncStatus, status: gpu.Buffer.MapAsyncStatus) void {
@@ -271,3 +296,13 @@ pub fn setup() !Setup {
         .device = device.?,
     };
 }
+const drm_i915_gem_exec_object2 = extern struct {
+    handle: u32,
+    relocation_count: u32,
+    relocs_ptr: u64,
+    alignment: u64,
+    offset: u64,
+    flags: u64,
+    rsvd1: u64,
+    rsvd2: u64,
+};
