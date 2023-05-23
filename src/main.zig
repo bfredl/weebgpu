@@ -9,6 +9,19 @@ pub const Setup = struct {
     device: *gpu.Device,
 };
 
+extern fn __errno_location() callconv(.C) *c_int;
+
+export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
+    // std.log.info("glass!", .{});
+    std.debug.print(".", .{});
+    const result = @bitCast(isize, std.os.linux.ioctl(fd, request, arg));
+    if (result < 0) {
+        __errno_location().* = @intCast(c_int, -result);
+        return -1;
+    }
+    return @intCast(c_int, result);
+}
+
 pub fn main() !void {
     const s = try setup();
     const dev = s.device;
@@ -83,8 +96,9 @@ pub fn main() !void {
 
     commandEncoder.copyBufferToBuffer(buf, 0, buf_read, 0, size);
     const gpuCommands = commandEncoder.finish(&.{});
-    dev.getQueue().submit(&[_]*gpu.CommandBuffer{gpuCommands});
-    std.debug.print("submitted!\n", .{});
+    var cmdbuf: [1]*gpu.CommandBuffer = .{gpuCommands};
+    dev.getQueue().submit(&cmdbuf);
+    std.debug.print("\nsubmitted!\n", .{});
 
     var status: ?gpu.Buffer.MapAsyncStatus = null;
     buf_read.mapAsync(.{ .read = true }, 0, size, &status, callback);
@@ -95,7 +109,7 @@ pub fn main() !void {
             if (status) |st| break :res st;
         }
     };
-    std.debug.print("tickade: {}\n", .{i});
+    std.debug.print("\ntickade: {}\n", .{i});
     std.debug.print("here is the result: {}!\n", .{result});
 }
 
@@ -156,7 +170,7 @@ pub fn setup() !Setup {
     // Print which adapter we are using.
     var props = std.mem.zeroes(gpu.Adapter.Properties);
     response.?.adapter.getProperties(&props);
-    std.debug.print("found GLUGG backend on {s} adapter: {s}, {s}\n", .{
+    std.debug.print("\nfound GLUGG backend on {s} adapter: {s}, {s}\n", .{
         // props.backend_type.name(),
         props.adapter_type.name(),
         props.name,
