@@ -50,12 +50,18 @@ fn display_if(request: u32, arg: usize, dir: util.Dir, kind: u32, comptime Data:
     return d;
 }
 
+var tystnad: bool = true;
+
 export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
     // std.log.info("glass! {}", .{request});
     const result = @bitCast(isize, std.os.linux.ioctl(fd, request, arg));
     if (result < 0) {
         __errno_location().* = @intCast(c_int, -result);
         return -1;
+    }
+
+    if (tystnad) {
+        return @intCast(c_int, result);
     }
 
     std.debug.print("{} ", .{fd});
@@ -75,8 +81,16 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
         _ = data;
     } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_GET_APERTURE, c.drm_i915_gem_get_aperture, "aperture")) |data| {
         _ = data;
+    } else if (display_if(request, arg, .R, c.DRM_I915_GEM_EXECBUFFER2, c.drm_i915_gem_execbuffer2, "exec time!!")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_WAIT, c.drm_i915_gem_wait, "gem_wait!")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, 0xbf - 0x40, c.drm_syncobj_create, "syncobj!")) |data| {
+        _ = data;
+    } else if (display_if(request, arg, .WR, 0xc3 - 0x40, c.drm_syncobj_wait, "sync wait")) |data| {
+        _ = data;
     } else {
-        std.debug.print(".\n", .{});
+        std.debug.print(". {}: {}\n", .{ request, util.parse_nr(request) });
     }
     return @intCast(c_int, result);
 }
@@ -89,6 +103,8 @@ pub fn main() !void {
     const size = 4 * elm;
 
     std.debug.print("\n[FOUND]\n\n", .{});
+    std.debug.print("the sync create: num {} siz {}\n", .{ 0xbf, @sizeOf(c.drm_syncobj_create) });
+    std.debug.print("the sync wait: {} siz {}\n", .{ 0xc3, @sizeOf(c.drm_syncobj_wait) });
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -238,6 +254,8 @@ pub fn setup() !Setup {
         props.name,
         props.driver_description,
     });
+
+    tystnad = false;
 
     // Create a device with default limits/features.
     const device = response.?.adapter.createDevice(null);
