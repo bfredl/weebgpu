@@ -23,4 +23,13 @@ pub fn build(b: *std.Build) !void {
     exe.addIncludePath("src/uapi");
     try gpu.link(b, exe, .{});
     b.installArtifact(exe);
+
+    var vulkan = b.addExecutable(.{
+        .name = "demo_vulkan",
+        .root_source_file = .{ .path = "src/demo_vulkan.zig" },
+        .optimize = opt,
+    });
+    vulkan.linkSystemLibrary("c");
+    vulkan.linkSystemLibrary("vulkan");
+    b.installArtifact(vulkan);
 }

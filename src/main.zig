@@ -83,6 +83,8 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
     } else if (display_if(request, arg, .WR, c.DRM_I915_GEM_GET_APERTURE, c.drm_i915_gem_get_aperture, "aperture")) |data| {
         _ = data;
     } else if (display_if(request, arg, .R, c.DRM_I915_GEM_EXECBUFFER2, c.drm_i915_gem_execbuffer2, "exec time!!")) |data| {
+        print("it is time to muck about!\n", .{});
+        // a_ = std.os.linux.kill(0, 5); // SIGTRAP for debugger
         if ((data.flags & c.I915_EXEC_FENCE_ARRAY) != 0) {
             const fences = @intToPtr([*]const c.struct_drm_i915_gem_exec_fence, data.cliprects_ptr)[0..data.num_cliprects];
             for (fences) |b| {
@@ -199,6 +201,7 @@ pub fn main() !void {
 
     commandEncoder.copyBufferToBuffer(buf, 0, buf_read, 0, size);
     const gpuCommands = commandEncoder.finish(&.{});
+    print("\nsubmit:\n", .{});
     var cmdbuf: [1]*gpu.CommandBuffer = .{gpuCommands};
     dev.getQueue().submit(&cmdbuf);
     print("\nsubmitted!\n", .{});
