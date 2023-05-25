@@ -11,12 +11,17 @@ pub fn main() !void {
 
 pub const Setup = struct {};
 
-pub fn setup(allocator: std.mem.Allocator) !Setup {
+pub fn venum(self: anytype, comptime meth: anytype, comptime Kind: type, allocator: std.mem.Allocator) ![]Kind {
+    var count: u32 = 0;
+    if (meth(self, &count, null) != v.VK_SUCCESS) return error.VulkanError;
+    const arr = try allocator.alloc(Kind, count);
+    if (meth(self, &count, arr.ptr) != v.VK_SUCCESS) return error.VulkanError;
+    return arr;
+}
+
+pub fn setup(a: std.mem.Allocator) !Setup {
     if (false) {
-        var extensionCount: u32 = 0;
-        _ = v.vkEnumerateInstanceExtensionProperties(null, &extensionCount, null);
-        const exts = try allocator.alloc(v.VkExtensionProperties, extensionCount);
-        _ = v.vkEnumerateInstanceExtensionProperties(null, &extensionCount, exts.ptr);
+        const exts = try venum(null, v.vkEnumerateInstanceExtensionProperties, v.VkExtensionProperties, a);
         for (exts) |e| {
             print("ITYM: {s}\n", .{e.extensionName});
         }
@@ -39,13 +44,10 @@ pub fn setup(allocator: std.mem.Allocator) !Setup {
         print("fooka: {}\n", .{result});
         return error.VulkanError;
     }
-    var deviceCount: u32 = 0;
-    _ = v.vkEnumeratePhysicalDevices(instance, &deviceCount, null);
-    const devs = try allocator.alloc(v.VkPhysicalDevice, deviceCount);
-    _ = v.vkEnumeratePhysicalDevices(instance, &deviceCount, devs.ptr);
+    const devs = try venum(instance, v.vkEnumeratePhysicalDevices, v.VkPhysicalDevice, a);
 
-    print("device: {}\n", .{deviceCount});
-    if (deviceCount == 0) return error.VulkanError;
+    print("device: {}\n", .{devs.len});
+    if (devs.len == 0) return error.VulkanError;
     const dev = devs[0];
 
     var deviceProperties: v.VkPhysicalDeviceProperties = undefined;
@@ -55,7 +57,7 @@ pub fn setup(allocator: std.mem.Allocator) !Setup {
 
     var deviceFeatures: v.VkPhysicalDeviceFeatures = undefined;
     v.vkGetPhysicalDeviceFeatures(dev, &deviceFeatures);
-    print("feat: {}\n", .{deviceFeatures});
+    // print("feat: {}\n", .{deviceFeatures});
 
     return .{};
 }
