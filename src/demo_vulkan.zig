@@ -6,7 +6,36 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     const s = try setup(allocator);
-    _ = s;
+
+    const bufferInfo: v.VkBufferCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .usage = v.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .size = 4096,
+        .sharingMode = v.VK_SHARING_MODE_EXCLUSIVE,
+        .pNext = null,
+        .flags = 0,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = null,
+    };
+
+    var buf: v.VkBuffer = undefined;
+    try verify(v.vkCreateBuffer(s.dev, &bufferInfo, null, &buf));
+
+    var memRequirements: v.VkMemoryRequirements = undefined;
+    v.vkGetBufferMemoryRequirements(s.dev, buf, &memRequirements);
+    print("mem: {}\n", .{memRequirements});
+
+    if ((memRequirements.memoryTypeBits & 1) == 0) return error.NowYouDoneIt;
+
+    var bufmem: v.VkDeviceMemory = undefined;
+    const allocInfo: v.VkMemoryAllocateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex = 0,
+        .pNext = null,
+    };
+    try verify(v.vkAllocateMemory(s.dev, &allocInfo, null, &bufmem));
+    try verify(v.vkBindBufferMemory(s.dev, buf, bufmem, 0));
 }
 
 pub const Setup = struct {
@@ -88,6 +117,12 @@ pub fn setup(a: std.mem.Allocator) !Setup {
 
     var queue: v.VkQueue = undefined;
     try verify(v.vkGetDeviceQueue(dev, 0, 0, &queue));
+
+    if (false) {
+        var memProperties: v.VkPhysicalDeviceMemoryProperties = undefined;
+        v.vkGetPhysicalDeviceMemoryProperties(phys_dev, &memProperties);
+        print("mems: {}, heaps: {}\n", .{ memProperties.memoryTypeCount, memProperties.memoryHeapCount });
+    }
 
     return .{
         .instance = instance,
