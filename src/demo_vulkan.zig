@@ -36,6 +36,72 @@ pub fn main() !void {
     };
     try verify(v.vkAllocateMemory(s.dev, &allocInfo, null, &bufmem));
     try verify(v.vkBindBufferMemory(s.dev, buf, bufmem, 0));
+
+    const layoutBinding: v.VkDescriptorSetLayoutBinding = .{
+        .binding = 0,
+        .descriptorCount = 1,
+        .descriptorType = v.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pImmutableSamplers = null,
+        .stageFlags = v.VK_SHADER_STAGE_COMPUTE_BIT,
+    };
+
+    const layoutInfo: v.VkDescriptorSetLayoutCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &layoutBinding,
+        .flags = 0,
+        .pNext = null,
+    };
+    var computeDescriptorSetLayout: v.VkDescriptorSetLayout = undefined;
+    try verify(v.vkCreateDescriptorSetLayout(s.dev, &layoutInfo, null, &computeDescriptorSetLayout));
+
+    const pipelineLayoutInfo: v.VkPipelineLayoutCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &computeDescriptorSetLayout,
+        .pPushConstantRanges = null,
+        .pushConstantRangeCount = 0,
+        .flags = 0,
+        .pNext = null,
+    };
+    var pipelineLayout: v.VkPipelineLayout = undefined;
+    try verify(v.vkCreatePipelineLayout(s.dev, &pipelineLayoutInfo, null, &pipelineLayout));
+
+    const kod = @embedFile("./shader.spv");
+
+    const createInfo: v.VkShaderModuleCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = kod.len,
+        .pCode = @ptrCast(*const u32, @alignCast(4, kod.ptr)),
+        .flags = 0,
+        .pNext = null,
+    };
+
+    var shaderModule: v.VkShaderModule = undefined;
+    try verify(v.vkCreateShaderModule(s.dev, &createInfo, null, &shaderModule));
+
+    const computeShaderStageInfo: v.VkPipelineShaderStageCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = v.VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = shaderModule,
+        .pName = "main",
+        .pSpecializationInfo = null,
+        .flags = 0,
+        .pNext = null,
+    };
+
+    const pipelineInfo: v.VkComputePipelineCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .layout = pipelineLayout,
+        .stage = computeShaderStageInfo,
+        .basePipelineIndex = 0,
+        .basePipelineHandle = null,
+        .flags = 0,
+        .pNext = null,
+    };
+
+    var computePipeline: v.VkPipeline = undefined;
+    try verify(v.vkCreateComputePipelines(s.dev, null, 1, &pipelineInfo, null, &computePipeline));
 }
 
 pub const Setup = struct {
