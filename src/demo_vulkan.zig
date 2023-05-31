@@ -52,13 +52,13 @@ pub fn main() !void {
         .flags = 0,
         .pNext = null,
     };
-    var computeDescriptorSetLayout: v.VkDescriptorSetLayout = undefined;
-    try verify(v.vkCreateDescriptorSetLayout(s.dev, &layoutInfo, null, &computeDescriptorSetLayout));
+    var descriptorSetLayout: v.VkDescriptorSetLayout = undefined;
+    try verify(v.vkCreateDescriptorSetLayout(s.dev, &layoutInfo, null, &descriptorSetLayout));
 
     const pipelineLayoutInfo: v.VkPipelineLayoutCreateInfo = .{
         .sType = v.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
-        .pSetLayouts = &computeDescriptorSetLayout,
+        .pSetLayouts = &descriptorSetLayout,
         .pPushConstantRanges = null,
         .pushConstantRangeCount = 0,
         .flags = 0,
@@ -66,6 +66,53 @@ pub fn main() !void {
     };
     var pipelineLayout: v.VkPipelineLayout = undefined;
     try verify(v.vkCreatePipelineLayout(s.dev, &pipelineLayoutInfo, null, &pipelineLayout));
+
+    const poolSize: v.VkDescriptorPoolSize = .{
+        .type = v.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+    };
+
+    const descPoolInfo: v.VkDescriptorPoolCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize,
+        .maxSets = 1,
+        .flags = 0,
+        .pNext = null,
+    };
+
+    var descriptorPool: v.VkDescriptorPool = undefined;
+    try verify(v.vkCreateDescriptorPool(s.dev, &descPoolInfo, null, &descriptorPool));
+
+    const setAllocInfo: v.VkDescriptorSetAllocateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorSetLayout,
+        .pNext = null,
+    };
+
+    var descriptorSet: v.VkDescriptorSet = undefined;
+    try verify(v.vkAllocateDescriptorSets(s.dev, &setAllocInfo, &descriptorSet));
+
+    const descBufferInfo: v.VkDescriptorBufferInfo = .{
+        .buffer = buf,
+        .offset = 0,
+        .range = v.VK_WHOLE_SIZE,
+    };
+    const descriptorWrite: v.VkWriteDescriptorSet = .{
+        .sType = v.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = descriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorType = v.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .pBufferInfo = &descBufferInfo,
+        .pImageInfo = null,
+        .pTexelBufferView = null,
+        .pNext = null,
+    };
+    v.vkUpdateDescriptorSets(s.dev, 1, &descriptorWrite, 0, null);
 
     const kod = @embedFile("./shader.spv");
 
@@ -102,6 +149,43 @@ pub fn main() !void {
 
     var computePipeline: v.VkPipeline = undefined;
     try verify(v.vkCreateComputePipelines(s.dev, null, 1, &pipelineInfo, null, &computePipeline));
+
+    const poolInfo: v.VkCommandPoolCreateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = v.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = 0,
+        .pNext = null,
+    };
+
+    var commandPool: v.VkCommandPool = undefined;
+    try verify(v.vkCreateCommandPool(s.dev, &poolInfo, null, &commandPool));
+
+    const cmdAllocInfo: v.VkCommandBufferAllocateInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = commandPool,
+        .level = v.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+        .pNext = null,
+    };
+
+    var commandBuffer: v.VkCommandBuffer = undefined;
+    try verify(v.vkAllocateCommandBuffers(s.dev, &cmdAllocInfo, &commandBuffer));
+
+    const beginInfo: v.VkCommandBufferBeginInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pInheritanceInfo = null,
+        .flags = 0,
+        .pNext = null,
+    };
+
+    try verify(v.vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    v.vkCmdBindPipeline(commandBuffer, v.VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    v.vkCmdBindDescriptorSets(commandBuffer, v.VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+
+    v.vkCmdDispatch(commandBuffer, 1, 1, 1);
+
+    try verify(v.vkEndCommandBuffer(commandBuffer));
 }
 
 pub const Setup = struct {
