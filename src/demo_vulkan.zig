@@ -186,6 +186,18 @@ pub fn main() !void {
     v.vkCmdDispatch(commandBuffer, 1, 1, 1);
 
     try verify(v.vkEndCommandBuffer(commandBuffer));
+    const submitInfo: v.VkSubmitInfo = .{
+        .sType = v.VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pSignalSemaphores = null,
+        .signalSemaphoreCount = 0,
+        .pCommandBuffers = &commandBuffer,
+        .commandBufferCount = 1,
+        .pWaitDstStageMask = 0,
+        .pWaitSemaphores = 0,
+        .waitSemaphoreCount = 0,
+        .pNext = null,
+    };
+    try verify(v.vkQueueSubmit(s.queue, 1, &submitInfo, null));
 }
 
 pub const Setup = struct {
