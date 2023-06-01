@@ -31,5 +31,6 @@ pub fn build(b: *std.Build) !void {
     });
     vulkan.linkSystemLibrary("c");
     vulkan.linkSystemLibrary("vulkan");
+    vulkan.addIncludePath("src/uapi");
     b.installArtifact(vulkan);
 }

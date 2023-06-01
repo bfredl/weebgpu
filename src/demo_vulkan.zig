@@ -2,6 +2,8 @@ const std = @import("std");
 const v = @import("./c_vulkan.zig");
 const print = std.debug.print;
 
+const display_gem = @import("./display_gem.zig");
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -261,6 +263,8 @@ pub fn setup(a: std.mem.Allocator) !Setup {
     };
 
     const enabledFeatures = std.mem.zeroInit(v.VkPhysicalDeviceFeatures, .{});
+
+    display_gem.tystnad = false;
 
     const createInfo: v.VkDeviceCreateInfo = .{
         .sType = v.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
