@@ -4,6 +4,9 @@ const linux = std.os.linux;
 const info = std.log.info;
 const util = @import("./util.zig");
 const ioctlnr = util.ioctlnr;
+const mem = std.mem;
+
+const c = @import("./c.zig");
 
 pub fn retry_ioctl(fd: linux.fd_t, request: u32, arg: usize) usize {
     while (true) {
@@ -30,8 +33,8 @@ pub fn main() !void {
     const fd = (try fs.cwd().openFileZ("/dev/dri/renderD128", .{ .mode = .read_write })).handle;
     info("the fd {}\n", .{fd});
 
-    var create: drm_i915_gem_context_create = .{};
-    const cret = intel_ioctl(fd, .WR, DRM_I915_GEM_CONTEXT_CREATE, &create);
+    var create = mem.zeroes(c.drm_i915_gem_context_create);
+    const cret = intel_ioctl(fd, .WR, c.DRM_I915_GEM_CONTEXT_CREATE, &create);
     if (cret != 0) {
         return;
     }
@@ -41,11 +44,11 @@ pub fn main() !void {
 
     const size = 4 * 4096;
 
-    var gem_create: drm_i915_gem_create = .{
+    var gem_create = mem.zeroInit(c.drm_i915_gem_create, .{
         .size = size,
-    };
+    });
 
-    var ret = intel_ioctl(fd, .WR, DRM_I915_GEM_CREATE, &gem_create);
+    var ret = intel_ioctl(fd, .WR, c.DRM_I915_GEM_CREATE, &gem_create);
     if (ret != 0) {
         return;
     }
@@ -53,12 +56,12 @@ pub fn main() !void {
     info("fin handel: {}", .{gem_create.handle});
     const gem_handle = gem_create.handle;
 
-    var gem_mmap: drm_i915_gem_mmap_offset = .{
+    var gem_mmap = mem.zeroInit(c.drm_i915_gem_mmap_offset, .{
         .handle = gem_handle,
-        .flags = I915_MMAP_OFFSET_WB,
-    };
-    info("fina: {}", .{DRM_I915_GEM_MMAP_GTT});
-    ret = intel_ioctl(fd, .WR, DRM_I915_GEM_MMAP_GTT, &gem_mmap);
+        .flags = c.I915_MMAP_OFFSET_WB,
+    });
+    info("fina: {}", .{c.DRM_I915_GEM_MMAP_GTT});
+    ret = intel_ioctl(fd, .WR, c.DRM_I915_GEM_MMAP_GTT, &gem_mmap);
     if (ret != 0) {
         return;
     }
@@ -69,47 +72,3 @@ pub fn main() !void {
 
     info("pekaren: {}", .{ptr});
 }
-
-const drm_i915_gem_create = extern struct {
-    size: u64,
-    handle: u32 = undefined,
-    pad: u32 = undefined,
-};
-
-const drm_i915_gem_context_create = extern struct {
-    ctx_id: u32 = undefined,
-    pad: u32 = undefined,
-};
-
-const drm_i915_gem_mmap_offset = extern struct {
-    handle: u32,
-    pad: u32 = 0,
-    offset: u64 = undefined,
-    flags: u64,
-    extensions: u64 = 0,
-};
-
-const DRM_I915_GEM_INIT = 0x13;
-const DRM_I915_GEM_EXECBUFFER = 0x14;
-const DRM_I915_GEM_PIN = 0x15;
-const DRM_I915_GEM_UNPIN = 0x16;
-const DRM_I915_GEM_BUSY = 0x17;
-const DRM_I915_GEM_THROTTLE = 0x18;
-const DRM_I915_GEM_ENTERVT = 0x19;
-const DRM_I915_GEM_LEAVEVT = 0x1a;
-const DRM_I915_GEM_CREATE = 0x1b;
-const DRM_I915_GEM_PREAD = 0x1c;
-const DRM_I915_GEM_PWRITE = 0x1d;
-const DRM_I915_GEM_MMAP = 0x1e;
-const DRM_I915_GEM_SET_DOMAIN = 0x1f;
-const DRM_I915_GEM_SW_FINISH = 0x20;
-const DRM_I915_GEM_SET_TILING = 0x21;
-const DRM_I915_GEM_GET_TILING = 0x22;
-const DRM_I915_GEM_GET_APERTURE = 0x23;
-const DRM_I915_GEM_MMAP_GTT = 0x24;
-const DRM_I915_GEM_CONTEXT_CREATE = 0x2d;
-
-const I915_MMAP_OFFSET_WC = 1;
-const I915_MMAP_OFFSET_WB = 2;
-const I915_MMAP_OFFSET_UC = 3;
-const I915_MMAP_OFFSET_FIXED = 4;

@@ -33,4 +33,13 @@ pub fn build(b: *std.Build) !void {
     vulkan.linkSystemLibrary("vulkan");
     vulkan.addIncludePath("src/uapi");
     b.installArtifact(vulkan);
+
+    var itrace = b.addExecutable(.{
+        .name = "itrace",
+        .root_source_file = .{ .path = "src/itrace.zig" },
+        .optimize = opt,
+    });
+    itrace.linkSystemLibrary("c"); // only includes??
+    itrace.addIncludePath("src/uapi");
+    b.installArtifact(itrace);
 }

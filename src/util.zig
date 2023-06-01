@@ -26,3 +26,14 @@ pub fn parse_nr(request: u32) struct { nr: u32, size: u32, dir: u32 } {
     const dirval = (request >> _IOC_DIRSHIFT) & ((1 << 2) - 1);
     return .{ .nr = nr - 0x40, .size = size, .dir = dirval };
 }
+
+pub const drm_i915_gem_exec_object2 = extern struct {
+    handle: u32,
+    relocation_count: u32,
+    relocs_ptr: u64,
+    alignment: u64,
+    offset: u64,
+    flags: u64,
+    rsvd1: u64,
+    rsvd2: u64,
+};

@@ -84,7 +84,7 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
                 print("\n", .{});
             }
         }
-        const bufs = @intToPtr([*]const drm_i915_gem_exec_object2, data.buffers_ptr)[0..data.buffer_count];
+        const bufs = @intToPtr([*]const util.drm_i915_gem_exec_object2, data.buffers_ptr)[0..data.buffer_count];
         for (bufs) |b| {
             print("BUF ", .{});
             display(b) catch unreachable;
@@ -103,14 +103,3 @@ export fn ioctl(fd: c_int, request: u32, arg: usize) callconv(.C) c_int {
     }
     return @intCast(c_int, result);
 }
-
-const drm_i915_gem_exec_object2 = extern struct {
-    handle: u32,
-    relocation_count: u32,
-    relocs_ptr: u64,
-    alignment: u64,
-    offset: u64,
-    flags: u64,
-    rsvd1: u64,
-    rsvd2: u64,
-};
