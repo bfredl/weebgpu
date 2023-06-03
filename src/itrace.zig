@@ -33,9 +33,11 @@ pub fn main() !void {
 
     var batch = CmdBatch.init(allocator);
     try batch.append(cmd.pipeline_select(0));
-    try batch.append(cmd.NOOP); // round up to 8-byte boundary seems best
+    try batch.append(cmd.MI_BATCH_BUFFER_END);
+
+    if (batch.items.len % 1 == 1) try batch.append(cmd.NOOP); // round up to 8-byte boundary seems best
     for (batch.items) |i| {
-        print("0x{x:08}\n", .{i});
+        print("0x{x:0>8}\n", .{i});
     }
     defer batch.deinit();
 
@@ -58,8 +60,8 @@ pub fn execute_batch_simple(fd: fd_t, context_id: u32, obj: GemObj, batch: []u32
         .relocation_count = 0,
         .relocs_ptr = 0,
         .alignment = 0,
-        .offset = 0xFFFFFFFFFFFFFFFF,
-        .flags = 0,
+        .offset = 0,
+        .flags = c.EXEC_OBJECT_CAPTURE | c.EXEC_OBJECT_ASYNC,
         .rsvd1 = 0,
         .rsvd2 = 0,
     };
@@ -69,7 +71,7 @@ pub fn execute_batch_simple(fd: fd_t, context_id: u32, obj: GemObj, batch: []u32
         .buffer_count = 1,
         .batch_start_offset = 0,
         .batch_len = @intCast(c_uint, 4 * batch.len),
-        .flags = c.I915_EXEC_HANDLE_LUT | c.I915_EXEC_NO_RELOC, // TODO: mere
+        .flags = c.I915_EXEC_HANDLE_LUT | c.I915_EXEC_NO_RELOC,
         .rsvd1 = context_id,
         .rsvd2 = 0,
         .DR1 = 0,
@@ -79,6 +81,8 @@ pub fn execute_batch_simple(fd: fd_t, context_id: u32, obj: GemObj, batch: []u32
     };
 
     _ = try intel_ioctl(fd, .WR, c.DRM_I915_GEM_EXECBUFFER2, &execbuf);
+
+    print("object {}\n", .{object});
 }
 
 pub fn retry_ioctl(fd: fd_t, request: u32, arg: usize) usize {
@@ -144,4 +148,5 @@ const cmd = struct {
     }
 
     pub const NOOP: u32 = 0x0;
+    pub const MI_BATCH_BUFFER_END: u32 = 0x05000000;
 };
