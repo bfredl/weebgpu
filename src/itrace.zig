@@ -32,7 +32,8 @@ pub fn main() !void {
     info("objektet: {}", .{obj});
 
     var batch = CmdBatch.init(allocator);
-    try batch.append(cmd.pipeline_select(2));
+    try batch.append(cmd.pipeline_select(0));
+    try batch.append(cmd.NOOP); // round up to 8-byte boundary seems best
     for (batch.items) |i| {
         print("0x{x:08}\n", .{i});
     }
@@ -47,6 +48,10 @@ pub fn execute_batch_simple(fd: fd_t, context_id: u32, obj: GemObj, batch: []u32
     @memcpy(@intToPtr([*]u32, obj.ptr)[0..batch.len], batch);
     // TODO: clflush each cacheline?
     @fence(.Release);
+    asm volatile ("clflush (%[ptr])"
+        :
+        : [ptr] "{rax}" (obj.ptr),
+    );
 
     var object: util.drm_i915_gem_exec_object2 = .{
         .handle = obj.handle,
@@ -137,4 +142,6 @@ const cmd = struct {
         const base: u32 = ((0x3 << 29) | (0x1 << 27) | (0x1 << 24) | (0x4 << 16) | (0x3 << 8));
         return base + pipeline;
     }
+
+    pub const NOOP: u32 = 0x0;
 };
